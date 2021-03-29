@@ -21,7 +21,7 @@ for (i in 1:47) {
   content <- c(content,a)
 }
 
-content_df <- data_frame(content)
+content_df <- data_frame(content)s
 ```
 
 
@@ -40,7 +40,8 @@ for (i in 1:47) {
 Combine content and date_published
 ```{r}
 MoH_df <- data_frame(date_published, content) %>% 
-  mutate_all(~stringr::str_remove_all(.x,"\t|\n")) #clean the data
+  mutate(date_published = stringr::str_remove_all(date_published,"\t|\n")) %>% 
+  mutate(content = stringr::str_remove_all(content,"\t"))#clean the data
 
 
 ```
