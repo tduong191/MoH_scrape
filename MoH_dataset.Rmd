@@ -1,0 +1,51 @@
+
+
+
+Load Package
+```{r}
+library(tidyr)
+library(tidyverse)
+library(rvest)
+library(plyr)
+library(dplyr)
+library(stringr)
+```
+
+
+
+Load Data
+```{r}
+content <- readRDS("~/Google Drive/OUCRU/Covid-19/MoH_scrape.rds")
+```
+
+
+Find which row contains patient id
+```{r}
+content_df <- content %>% 
+  add_column(id = as.vector(NA)) %>% 
+  mutate(id = stringr::str_extract_all(content,"BN[:digit:]+"))
+```
+
+Delete rows that don't contain patient id
+```{r}
+id_row <- which(content_df$id != "character(0)")
+content_df <- content_df[id_row,]
+```
+
+```{r}
+l <- list()
+for (i in 1:nrow(content_df)) {
+  d <- data.frame(c(content_df[i,"id"]))
+  colnames(d) <- "id"
+  d$content <- rep(content_df[i, "content"], nrow(d))
+  l[[i]] <- d
+}
+
+df <- do.call(rbind, l)
+
+```
+
+
+
+
+

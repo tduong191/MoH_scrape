@@ -1,0 +1,61 @@
+Package
+```{r}
+library(tidyr)
+library(tidyverse)
+library(rvest)
+library(plyr)
+library(dplyr)
+```
+
+
+Script for scraping paragraphs
+```{r}
+url <- paste0("https://ncov.moh.gov.vn/web/guest/dong-thoi-gian?p_p_id=com_liferay_asset_publisher_web_portlet_AssetPublisherPortlet_INSTANCE_nf7Qy5mlPXqs&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&_com_liferay_asset_publisher_web_portlet_AssetPublisherPortlet_INSTANCE_nf7Qy5mlPXqs_delta=10&p_r_p_resetCur=false&_com_liferay_asset_publisher_web_portlet_AssetPublisherPortlet_INSTANCE_nf7Qy5mlPXqs_cur=",1:47)
+
+content <- vector()
+for (i in 1:47) {
+  MoH <- read_html(url[i])
+  a <- MoH %>% 
+            html_nodes(".timeline-content") %>% 
+            html_text()
+  content <- c(content,a)
+}
+
+content_df <- data_frame(content)
+```
+
+
+Script for scraping published dates
+```{r}
+date_published <- vector()
+for (i in 1:47) {
+  MoH <- read_html(url[i])
+  b <- MoH %>% 
+            html_nodes(".timeline-head") %>% 
+            html_text()
+  date_published <- c(date_published,b)
+}
+```
+
+Combine content and date_published
+```{r}
+MoH_df <- data_frame(date_published, content) %>% 
+  mutate_all(~stringr::str_remove_all(.x,"\t|\n")) #clean the data
+
+
+```
+
+
+Save files
+```{r}
+saveRDS(content_df, "~/Google Drive/OUCRU/Covid-19/MoH_content.rds")
+content_df %>%
+  openxlsx::write.xlsx("~/Google Drive/OUCRU/Covid-19/MoH_content.xlsx", quote = FALSE, row.names = FALSE)
+```
+
+```{r}
+saveRDS(MoH_df, "~/Google Drive/OUCRU/Covid-19/MoH_dataset.rds")
+MoH_df %>%
+  openxlsx::write.xlsx("~/Google Drive/OUCRU/Covid-19/MoH_dataset.xlsx", quote = FALSE, row.names = FALSE)
+```
+
