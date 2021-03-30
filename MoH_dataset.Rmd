@@ -10,14 +10,28 @@ library(plyr)
 library(dplyr)
 library(stringr)
 #install.packages("tidytext")
+install.packages("unpivotr")
+library(unpivotr)
 library(tidytext)
 ```
 
 
-
 Load Data
 ```{r}
-MoH <- readRDS("~/Google Drive/OUCRU/Covid-19/MoH_dataset.rds")
+MoH <- readRDS("~/Google Drive/OUCRU/Covid-19/MoH_dataset.rds") %>% 
+  mutate_all(~str_remove(.,"\n"))
+```
+
+When they declare "THONG BAO", they separate paragraphs. I combine the needed information together
+```{r}
+thongbao <- MoH %>% 
+  filter(grepl("THÔNG BÁO", content)) %>% 
+  mutate(content = str_replace(content,"\n\n", ":"))
+
+MoH %<>% 
+  left_join(thongbao, by = c("date_published"), suffix = c("",".tb")) %>% 
+  mutate(content = ifelse(!is.na(content.tb), content.tb, content)) %>% 
+  select(-content.tb)
 ```
 
 
@@ -41,21 +55,31 @@ Delete rows that don't contain patient id
 id_row <- which(MoH_df$id != "character(0)")
 MoH_df <- MoH_df[id_row,]
 
-thong_bao_row <- grep("thông báo", MoH_df$sentences)
+
 ```
 
 ```{r}
 l <- list()
-for (i in 1:nrow(content_df)) {
-  d <- data.frame(c(content_df[i,"id"]))
+for (i in 1:nrow(MoH_df)) {
+  d <- data.frame(c(MoH_df[i,"id"]))
   colnames(d) <- "id"
-  d$content <- rep(content_df[i, "content"], nrow(d))
+  d$sentences <- rep(MoH_df[i, "sentences"], nrow(d))
   l[[i]] <- d
 }
 
-df <- do.call(rbind, l)
+df <- do.call(rbind, l) %>% 
+  mutate(id = str_remove(id,"bn"))
 
+f <- function(x) df %>% filter(id == x) %>% pull(sentences)
+
+df1 <- data.frame(id = unique(df$id)) %>% 
+  mutate(sentences = map(unique(df$id), f))
+  
 ```
+
+
+
+
 
 
 
