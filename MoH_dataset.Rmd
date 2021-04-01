@@ -10,7 +10,7 @@ library(plyr)
 library(dplyr)
 library(stringr)
 #install.packages("tidytext")
-install.packages("unpivotr")
+# install.packages("unpivotr")
 library(unpivotr)
 library(tidytext)
 ```
@@ -39,26 +39,46 @@ Separate paragraphs
 ```{r}
 MoH_df <- MoH %>% 
     unnest_tokens(output = "sentences", input = content,
-                token = "regex", pattern = "\\n")  
+                token = "regex", pattern = "\n\n|\n|\n \n")  
 ```
 
 Find which paragraph contains which patient id
 ```{r}
 MoH_df %<>% 
   add_column(id = as.vector(NA)) %>% 
-  mutate(id = stringr::str_extract_all(sentences,"bn[:digit:]+")) 
+  mutate(id = stringr::str_extract_all(sentences,"bn[:digit:]+-[:digit:]+|bn[:digit:]+")) 
 ```
+
+Funtion
+```{r}
+
+```
+
 
 
 Delete rows that don't contain patient id
 ```{r}
 id_row <- which(MoH_df$id != "character(0)")
 MoH_df <- MoH_df[id_row,]
-
-
 ```
 
+clean the id column
 ```{r}
+MoH_df %<>% 
+  # filter(grepl("-",id)) %>% 
+  mutate(id = as.character(id)) %>% 
+  mutate(id = str_remove_all(id,"bn")) %>% 
+  mutate(id = str_remove_all(id,"c")) %>%
+  mutate(id = str_remove_all(id,"\\(|\\)")) %>% 
+  mutate(id = str_replace_all(id,"-",",")) %>% 
+  mutate(id = noquote(id)) %>% 
+  mutate(id = gsub('"', '', id))
+
+MoH_id <- str_split(a$id,",") 
+
+MoH_id <- as.vector(as.numeric(str_trim(unlist(MoH_id), side = c("both"))))
+
+
 l <- list()
 for (i in 1:nrow(MoH_df)) {
   d <- data.frame(c(MoH_df[i,"id"]))
@@ -66,16 +86,29 @@ for (i in 1:nrow(MoH_df)) {
   d$sentences <- rep(MoH_df[i, "sentences"], nrow(d))
   l[[i]] <- d
 }
+df <- do.call(rbind, l)
 
-df <- do.call(rbind, l) %>% 
-  mutate(id = str_remove(id,"bn"))
 
-f <- function(x) df %>% filter(id == x) %>% pull(sentences)
+f <- function(x) MoH_df %>% filter(grepl(paste0("\\<",x,"\\>"), id)) %>% pull(sentences)
 
-df1 <- data.frame(id = unique(df$id)) %>% 
-  mutate(sentences = map(unique(df$id), f))
-  
+#dataset with description details for each individual
+df1 <- data.frame(id = unique(MoH_id)) %>% 
+  mutate(sentences = map(unique(MoH_id), f))
 ```
+
+
+
+
+filter out rows that have f1
+```{r}
+MoH_f1<- MoH_df %>% 
+  filter(grepl("f1", sentences)) 
+
+
+df1 %>% 
+  filter(grepl("f1", sentences)) %>% view
+```
+
 
 
 
