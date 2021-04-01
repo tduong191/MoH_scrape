@@ -49,12 +49,6 @@ MoH_df %<>%
   mutate(id = stringr::str_extract_all(sentences,"bn[:digit:]+-[:digit:]+|bn[:digit:]+")) 
 ```
 
-Funtion
-```{r}
-
-```
-
-
 
 Delete rows that don't contain patient id
 ```{r}
@@ -101,14 +95,27 @@ df1 <- data.frame(id = unique(MoH_id)) %>%
 
 filter out rows that have f1
 ```{r}
-MoH_f1<- MoH_df %>% 
+MoH_f1<- df1 %>% 
   filter(grepl("f1", sentences)) 
-
-
-df1 %>% 
-  filter(grepl("f1", sentences)) %>% view
 ```
 
+
+
+Get F1 for each of the row that contais f1
+```{r}
+# View(MoH_f1)
+
+tidyr::unnest(MoH_f1, cols=c(sentences)) -> MoH_f11
+MoH_f11 = within(MoH_f11, {
+  senc = stringi::stri_trans_general(sentences, "any-ascii")
+})
+
+
+MoH_f11 %<>% 
+    # mutate(f0 = stringr::str_extract_all(senc,r"{(?<=là\sf1\scủa\sbn)\d+}")) %>% 
+  mutate(f0 = stringr::str_extract_all(senc,r"{(?<=la\sf1\scua\sbn)\d+}")) %>% 
+  view
+```
 
 
 
