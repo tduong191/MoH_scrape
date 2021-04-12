@@ -18,9 +18,11 @@ library(tidytext)
 
 Load Data
 ```{r}
-MoH <- readRDS("~/Google Drive/OUCRU/Covid-19/MoH_dataset.rds") %>% 
+MoH <- readRDS("~/Google Drive/OUCRU/Covid-19/MoH_data.rds") %>% 
   mutate_all(~str_remove(.,"\n"))
 ```
+
+
 
 When they declare "THONG BAO", they separate paragraphs. I combine the needed information together
 ```{r}
@@ -35,90 +37,132 @@ MoH %<>%
 ```
 
 
+Make all the characters lower 
+```{r}
+MoH <- MoH %>% 
+  mutate(content = tolower(content))
+```
+
+
+Some paragraphs divide patient description by ";", so we will replace that by /n/n
+```{r}
+MoH <- MoH %>% 
+  mutate(content = ifelse(grepl(";\\sbn|;bn|;\\s\\sbn", content), str_replace_all(content, ";\\sbn|;bn|;\\s\\sbn", "\n\nbn" ), content)) 
+```
+
+Some paragraphs divide patient description by "/s - ca", so we will replace that by /n/n
+```{r}
+MoH <- MoH %>% 
+  mutate(content = ifelse(grepl("-\\sca|-ca", content), str_replace_all(content, "-\\sca|-ca", "\n\nca" ), content)) 
+```
+
+Some paragraphs use /n to divide descriptions of patients, which wll lead to losing patient information later.
+```{r}
+MoH <- MoH %>%  
+  mutate(content = ifelse(grepl("\n-|\n\n-|\n\\s\n-",content), str_replace_all(content,"\n-|\n\n-|\n\\s\n-","-"), content))
+```
+
+Some paragraphs divide patient description by "; bệnh nhân thứ", so we will replace that by /n/n
+```{r}
+MoH <- MoH %>% 
+  mutate(content = ifelse(grepl(";\\sbệnh nhân thứ|;\\sbệnh nhân", content), str_replace_all(content, ";\\sbệnh nhân thứ|;\\sbệnh nhân", "\n\nbệnh nhân" ), content)) 
+```
+
+<!-- Some paragraphs divide patient description by ".bn", so we will replace that by /n/n -->
+<!-- ```{r} -->
+<!-- MoH <- MoH %>%  -->
+<!--   mutate(content = ifelse(grepl(".bn|.//sbn", content), str_replace_all(content, ".bn|.//sbn", "\n\nbn" ), content))  -->
+<!-- ``` -->
+
 Separate paragraphs
 ```{r}
 MoH_df <- MoH %>% 
     unnest_tokens(output = "sentences", input = content,
                 token = "regex", pattern = "\n\n|\n|\n \n")  
+    # unnest_tokens(output = "sentences", input = sentences, 
+    #               token = "regex", pattern = ";") 
 ```
 
 Find which paragraph contains which patient id
 ```{r}
-MoH_df %<>% 
+MoH_id_df <- MoH_df %>% 
+  select_all() %>% 
   add_column(id = as.vector(NA)) %>% 
   mutate(id = stringr::str_extract_all(sentences,"bn[:digit:]+-[:digit:]+|bn[:digit:]+")) 
 ```
 
 
-Delete rows that don't contain patient id
+<!-- Delete rows that don't contain patient id -->
+<!-- ```{r} -->
+<!-- id_row <- which(MoH_df$id != "character(0)") -->
+<!-- MoH_df <- MoH_df[id_row,] -->
+<!-- ``` -->
+
+Change the rows that don't contain id to NA
 ```{r}
-id_row <- which(MoH_df$id != "character(0)")
-MoH_df <- MoH_df[id_row,]
+tidyr::unnest(MoH_id_df, cols=c(id)) -> MoH_id_df
 ```
 
-clean the id column
-```{r}
-MoH_df %<>% 
-  # filter(grepl("-",id)) %>% 
-  mutate(id = as.character(id)) %>% 
-  mutate(id = str_remove_all(id,"bn")) %>% 
-  mutate(id = str_remove_all(id,"c")) %>%
-  mutate(id = str_remove_all(id,"\\(|\\)")) %>% 
-  mutate(id = str_replace_all(id,"-",",")) %>% 
-  mutate(id = noquote(id)) %>% 
-  mutate(id = gsub('"', '', id))
 
-MoH_id <- str_split(a$id,",") 
+Transform the dataframe from ordered by date_published to ordered by patient id
+```{r}
+#clean the id column
+MoH_id_df %<>% 
+  mutate(id = str_replace_all(id,"-",",")) %>% 
+   mutate(id = str_remove_all(id,"bn")) 
+
+MoH_id <- str_split(MoH_id_df$id,",") 
 
 MoH_id <- as.vector(as.numeric(str_trim(unlist(MoH_id), side = c("both"))))
 
 
-l <- list()
-for (i in 1:nrow(MoH_df)) {
-  d <- data.frame(c(MoH_df[i,"id"]))
-  colnames(d) <- "id"
-  d$sentences <- rep(MoH_df[i, "sentences"], nrow(d))
-  l[[i]] <- d
-}
-df <- do.call(rbind, l)
+# l <- list()
+# for (i in 1:nrow(MoH_id_df)) {
+#   d <- data.frame(c(MoH_id_df[i,"id"]))
+#   colnames(d) <- "id"
+#   d$sentences <- rep(MoH_id_df[i, "sentences"], nrow(d))
+#   l[[i]] <- d
+# }
+# df <- do.call(rbind, l)
 
 
-f <- function(x) MoH_df %>% filter(grepl(paste0("\\<",x,"\\>"), id)) %>% pull(sentences)
+#functions to get the description and the date publised for each id
+f <- function(x) MoH_id_df %>% filter(grepl(paste0("\\<",x,"\\>"), id)) %>% pull(sentences)
+pull_date <- function(x) MoH_id_df %>% filter(grepl(paste0("\\<",x,"\\>"), id)) %>% pull(date_published)
 
 #dataset with description details for each individual
-df1 <- data.frame(id = unique(MoH_id)) %>% 
-  mutate(sentences = map(unique(MoH_id), f))
-```
+MoH_by_id <- data.frame(id = unique(MoH_id)) %>% 
+  mutate(sentences = map(unique(MoH_id), f)) %>% 
+  mutate(date_published = map(unique(MoH_id), pull_date))
 
+#create a column without Vietnamese tone markings so it will be easier to do string matching
+tidyr::unnest(MoH_by_id, cols=c(sentences)) -> MoH_by_id
+MoH_by_id = within(MoH_by_id, {
+  senc = stringi::stri_trans_general(sentences, "any-ascii")
+})
 
-
-
-filter out rows that have f1
-```{r}
-MoH_f1<- df1 %>% 
-  filter(grepl("f1", sentences)) 
 ```
 
 
 
 Get F1 for each of the row that contais f1
+# ```{r}
+# MoH_f1 <- MoH_by_id %>% 
+#     # mutate(f0 = stringr::str_extract_all(senc,r"{(?<=là\sf1\scủa\sbn)\d+}")) %>% 
+#   mutate(f0 = stringr::str_extract_all(senc,r"{(?<=la\sf1\scua\sbn)\d+}")) %>% 
+#   mutate(f1 = stringr::str_extract_all(senc,r"{(?=\sla\sf1\scua\sbn)}"))
+#```
+
+
+Export data
 ```{r}
-# View(MoH_f1)
-
-tidyr::unnest(MoH_f1, cols=c(sentences)) -> MoH_f11
-MoH_f11 = within(MoH_f11, {
-  senc = stringi::stri_trans_general(sentences, "any-ascii")
-})
-
-
-MoH_f11 %<>% 
-    # mutate(f0 = stringr::str_extract_all(senc,r"{(?<=là\sf1\scủa\sbn)\d+}")) %>% 
-  mutate(f0 = stringr::str_extract_all(senc,r"{(?<=la\sf1\scua\sbn)\d+}")) %>% 
-  view
+saveRDS(MoH_by_id, "~/Google Drive/OUCRU/Covid-19/MoH_by_id.rds")
+saveRDS(MoH_df, "~/Google Drive/OUCRU/Covid-19/MoH_df.rds")
+MoH_df %>%
+  openxlsx::write.xlsx("~/Google Drive/OUCRU/Covid-19/MoH_dataset.xlsx", quote = FALSE, row.names = FALSE)
+MoH_by_id %>%
+  openxlsx::write.xlsx("~/Google Drive/OUCRU/Covid-19/MoH_by_id.xlsx", quote = FALSE, row.names = FALSE)
 ```
-
-
-
 
 
 

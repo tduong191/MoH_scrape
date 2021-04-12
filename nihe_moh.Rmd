@@ -1,0 +1,103 @@
+Read data
+```{r}
+library(tidyverse)
+library(tidytext)
+library(dplyr)
+#install.packages("stopwords")
+# install.packages("devtools")
+#library(devtools)
+library(stopwords)
+#devtools::install_github("quanteda/stopwords")
+library(tidyr)
+library(tidyverse)
+library(rvest)
+library(plyr)
+library(dplyr)
+library(stringr)
+#install.packages("tidytext")
+# install.packages("unpivotr")
+library(unpivotr)
+library(tidytext)
+```
+
+```{r}
+nihe <- openxlsx::read.xlsx("~/Dropbox/raw data/Pha_n ti_ch ca du_o_ng ti_nh COVID-19-3.xlsx")
+moh <- readRDS("~/Google Drive/OUCRU/Covid-19/MoH_by_id.rds")
+```
+
+```{r}
+# moh <- moh[!duplicated(moh), ]
+
+```
+
+
+```{r}
+head(nihe)
+nihe %<>% 
+  mutate(MCB = stringr::str_remove_all(MCB,"NB")) %>% 
+  mutate(MCB = as.double(MCB)) 
+
+nihe_rela <- paste(paste0("\\<",(stringi::stri_trans_general(tolower(unique(nihe$Mối.quan.hệ.với.ca.bệnh.đích)), "any-ascii")),"\\>"),collapse = "|")
+```
+
+```{r}
+head(moh)
+vn_stopwords <- stopwords::stopwords("vi", source = "stopwords-iso")
+custom <- add_row(stop_words, word = vn_stopwords, lexicon = "custom")
+contact_words <- paste("\\<f1\\>|\\<tiep xuc\\>|\\<cung\\>|\\<giup viec\\>|\\<gap\\>|\\<bo\\>|\\<me\\>|chung|\\<con\\>|\\<cham soc\\>",nihe_rela, sep = "|")
+contact_w <- c("\\<f1\\>|\\<tiep xuc\\>|\\<cung\\>|\\<giup viec\\>|\\<gap\\>|\\<bo\\>|\\<me\\>|chung|\\<con\\>|\\<cham soc\\>")
+
+contact_w1 <- c("\\<f1\\>|\\<tiep xuc\\>")
+# moh %>% 
+#   unnest_tokens(output = "word", token = "words", input = senc) %>% 
+#   anti_join(custom) %>% 
+#   count(id, word, sort=TRUE)
+#   
+# 
+# 
+
+moh <- moh %>% 
+  mutate(contact_description = ifelse(grepl(contact_w1, senc), senc, NA) ) 
+```
+
+
+
+
+
+
+```{r}
+nihe_moh_join <- nihe %>% 
+  left_join(moh, by = c("MCB" = "id"), suffix = c("_nihe", "_moh")) %>% 
+  select(MCB, Tên.ca.bệnh.đích ,contact_description, sentences, date_published,   senc,Mối.quan.hệ.với.ca.bệnh.đích, Loại.giám.sát:Ngày.XN.2.so.với.ngày.XN.1)
+```
+
+Currently, I'm not interested in when cases recovered so I'll delete those rows
+# ```{r}
+# khoi_benh <- which(grepl("khoi benh", nihe_moh_join$senc))
+# nihe_moh_join <- nihe_moh_join[-khoi_benh,]
+# 
+# ```
+
+Get any contact mentioned in the contact description
+```{r}
+nihe_moh_join %>% 
+  mutate(contact_id = ifelse(!is.na(contact_description), str_extract_all(contact_description, "bn[:digit:]+|bn\\s[:digit:]+"), NA)) %>% 
+  select(MCB, Tên.ca.bệnh.đích ,contact_id, contact_description, sentences, date_published,   senc,Mối.quan.hệ.với.ca.bệnh.đích, Loại.giám.sát:Ngày.XN.2.so.với.ngày.XN.1) %>% 
+  view()
+```
+
+
+
+<!-- Problem -->
+<!-- ```{r} -->
+<!-- nihe_moh_join %>%  -->
+<!--   mutate(problem = as.character(NA)) %>%  -->
+<!--   mutate(f0_moh = as.integer(NA)) -->
+
+
+<!-- nihe_moh_join[2567, f0_moh] <- as.integer("2552") -->
+
+
+
+<!-- ``` -->
+
